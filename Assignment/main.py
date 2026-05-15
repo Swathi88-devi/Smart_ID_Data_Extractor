@@ -3,12 +3,7 @@
 SMART ID DATA EXTRACTOR - MAIN PROCESSOR
 ==========================================
 Processes ID card images to extract Name and Email with visual feedback.
-Handles OCR noise, varying text positions, and multiple OCR engines.
-
-Author: Assessment Solution
-Date: 2026-05-15
-"""
-
+Handles OCR noise, varying text positions, and multiple OCR engines."""
 import os
 import re
 import cv2
@@ -16,14 +11,12 @@ import numpy as np
 from pathlib import Path
 import logging
 from typing import Tuple, Dict, List, Optional
-
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
-
 # Try to import OCR libraries (with graceful fallback)
 try:
     import easyocr
@@ -31,22 +24,18 @@ try:
 except ImportError:
     OCR_AVAILABLE = {'easyocr': False}
     logger.warning("EasyOCR not installed. Install with: pip install easyocr")
-
 try:
     import pytesseract
     OCR_AVAILABLE['tesseract'] = True
 except ImportError:
     OCR_AVAILABLE['tesseract'] = False
     logger.warning("pytesseract not installed. Install with: pip install pytesseract")
-
 try:
     from paddleocr import PaddleOCR
     OCR_AVAILABLE['paddle'] = True
 except ImportError:
     OCR_AVAILABLE['paddle'] = False
     logger.warning("PaddleOCR not installed. Install with: pip install paddleocr")
-
-
 class SmartIDExtractor:
     """
     Extracts name and email from ID card images using OCR and Computer Vision.
@@ -58,7 +47,6 @@ class SmartIDExtractor:
     - Visual bounding box highlighting (GREEN for name, RED for email)
     - Confidence scoring and result validation
     """
-    
     def __init__(self, ocr_engine='easyocr', debug=False):
         """
         Initialize the extractor with specified OCR engine.
@@ -73,9 +61,7 @@ class SmartIDExtractor:
         self.image = None
         self.preprocessed = None
         self.results = {'name': None, 'email': None, 'raw_text': None}
-        
         self._initialize_ocr()
-    
     def _initialize_ocr(self):
         """Initialize the selected OCR engine."""
         if self.ocr_engine == 'easyocr' and OCR_AVAILABLE['easyocr']:
@@ -90,10 +76,7 @@ class SmartIDExtractor:
         else:
             raise ValueError(f"OCR engine '{self.ocr_engine}' not available or not installed")
     
-    # ============================================================================
-    # STEP 1: IMAGE PREPROCESSING
-    # ============================================================================
-    
+    # STEP 1: IMAGE PREPROCESSING 
     def load_image(self, image_path: str) -> bool:
         """
         Load and validate image.
@@ -113,7 +96,7 @@ class SmartIDExtractor:
             logger.error(f"Failed to load image: {image_path}")
             return False
         
-        logger.info(f"✓ Loaded image: {image_path}")
+        logger.info(f"Loaded image: {image_path}")
         logger.info(f"  Dimensions: {self.image.shape[1]}x{self.image.shape[0]} pixels")
         return True
     
@@ -140,11 +123,11 @@ class SmartIDExtractor:
         """
         # Stage 1: Grayscale
         gray = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
-        logger.info("✓ Converted to grayscale")
+        logger.info("Converted to grayscale")
         
         # Stage 2: Gaussian Blur (noise reduction)
         blurred = cv2.GaussianBlur(gray, (5, 5), 1.0)
-        logger.info("✓ Applied Gaussian blur (5×5)")
+        logger.info("Applied Gaussian blur (5×5)")
         
         # Stage 3: Adaptive Thresholding (handles varying lighting)
         # blockSize must be odd and > 1
@@ -156,17 +139,16 @@ class SmartIDExtractor:
             blockSize=11,  # Window size for local threshold
             C=2            # Constant subtracted from mean
         )
-        logger.info("✓ Applied adaptive thresholding")
+        logger.info("Applied adaptive thresholding")
         
         # Stage 4: Morphological Dilation (reconnect text)
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
         dilated = cv2.dilate(adaptive_thresh, kernel, iterations=1)
-        logger.info("✓ Applied morphological dilation")
+        logger.info("Applied morphological dilation")
         
         # Stage 5: Non-Local Means Denoising (advanced noise removal)
         denoised = cv2.fastNlMeansDenoising(dilated, None, h=10, templateWindowSize=7, searchWindowSize=21)
-        logger.info("✓ Applied non-local means denoising")
-        
+        logger.info("Applied non-local means denoising")
         self.preprocessed = denoised
         
         # Save debug images if enabled
@@ -184,10 +166,8 @@ class SmartIDExtractor:
         cv2.imwrite('debug_output/04_dilated.jpg', dilated)
         cv2.imwrite('debug_output/05_denoised.jpg', denoised)
         logger.info("  Debug images saved to debug_output/")
-    
-    # ============================================================================
+
     # STEP 2: OPTICAL CHARACTER RECOGNITION (OCR)
-    # ============================================================================
     
     def extract_text_easyocr(self) -> Tuple[str, List[Dict]]:
         """
@@ -222,7 +202,7 @@ class SmartIDExtractor:
                 })
                 raw_text += text + " "
         
-        logger.info(f"✓ Extracted {len(text_blocks)} text blocks")
+        logger.info(f" Extracted {len(text_blocks)} text blocks")
         return raw_text, text_blocks
     
     def extract_text_tesseract(self) -> Tuple[str, List[Dict]]:
@@ -297,7 +277,7 @@ class SmartIDExtractor:
                     })
                     raw_text += text + " "
         
-        logger.info(f"✓ Extracted {len(text_blocks)} text blocks")
+        logger.info(f" Extracted {len(text_blocks)} text blocks")
         return raw_text, text_blocks
     
     def extract_text(self) -> Tuple[str, List[Dict]]:
@@ -317,9 +297,7 @@ class SmartIDExtractor:
             logger.error(f"Unknown OCR engine: {self.ocr_engine}")
             return "", []
     
-    # ============================================================================
     # STEP 3: INTELLIGENT TEXT PARSING
-    # ============================================================================
     
     @staticmethod
     def extract_email(text: str) -> Optional[str]:
@@ -406,9 +384,8 @@ class SmartIDExtractor:
         
         return None
     
-    # ============================================================================
     # STEP 4: TEXT BLOCK MATCHING (Find coordinates)
-    # ============================================================================
+
     
     def find_text_block_bbox(self, target_text: str, text_blocks: List[Dict]) -> Optional[Dict]:
         """
@@ -451,9 +428,7 @@ class SmartIDExtractor:
         
         return None
     
-    # ============================================================================
     # STEP 5: VISUAL FEEDBACK (Bounding Boxes)
-    # ============================================================================
     
     def draw_bounding_boxes(self, name: Optional[str], email: Optional[str], 
                            text_blocks: List[Dict]) -> np.ndarray:
@@ -492,9 +467,9 @@ class SmartIDExtractor:
                     (0, 255, 0), 
                     2
                 )
-                logger.info(f"  ✓ Drew GREEN box around: {name}")
+                logger.info(f"  Drew GREEN box around: {name}")
             else:
-                logger.warning(f"  ✗ Could not find bbox for name: {name}")
+                logger.warning(f"  Could not find bbox for name: {name}")
         
         # Draw red box for EMAIL
         if email:
@@ -514,9 +489,9 @@ class SmartIDExtractor:
                     (0, 0, 255), 
                     2
                 )
-                logger.info(f"  ✓ Drew RED box around: {email}")
+                logger.info(f"  Drew RED box around: {email}")
             else:
-                logger.warning(f"  ✗ Could not find bbox for email: {email}")
+                logger.warning(f"  Could not find bbox for email: {email}")
         
         return display_image
     
@@ -533,14 +508,12 @@ class SmartIDExtractor:
         """
         success = cv2.imwrite(filename, image)
         if success:
-            logger.info(f"✓ Saved output image: {filename}")
+            logger.info(f" Saved output image: {filename}")
         else:
-            logger.error(f"✗ Failed to save output image")
+            logger.error(f" Failed to save output image")
         return success
     
-    # ============================================================================
     # MAIN PROCESSING PIPELINE
-    # ============================================================================
     
     def process(self, image_path: str, output_path: str = 'output_processed.png') -> Dict:
         """
@@ -597,10 +570,7 @@ class SmartIDExtractor:
         
         return self.results
 
-
-# ============================================================================
 # BATCH PROCESSING
-# ============================================================================
 
 def process_batch(input_folder: str = 'input_images', 
                   output_folder: str = 'output_results',
@@ -673,7 +643,7 @@ def print_batch_summary(results: List[Dict]):
     logger.info("-" * 70)
     
     for i, result in enumerate(results, 1):
-        status = "✓" if result['name'] and result['email'] else "✗"
+        status = "" if result['name'] and result['email'] else "✗"
         logger.info(f"{status} {i:2d}. {result['filename']}")
         if result['name']:
             logger.info(f"      Name : {result['name']}")
@@ -683,9 +653,7 @@ def print_batch_summary(results: List[Dict]):
     logger.info("=" * 70)
 
 
-# ============================================================================
 # ENTRY POINT
-# ============================================================================
 
 if __name__ == "__main__":
     import sys
